@@ -43,4 +43,9 @@ def create_app(settings: Settings | None = None, gateway: ProviderGateway | None
     app.include_router(tasks.router)
     app.include_router(users.router)
     app.include_router(webhooks.router)
+
+    @app.get("/health", include_in_schema=False)
+    async def health() -> dict[str, str]:
+        return {"status": "ok"}
+
     return app

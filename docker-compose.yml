@@ -2,6 +2,15 @@ x-app-env: &app-env
   DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/generation
   WEBHOOK_SECRET: ${WEBHOOK_SECRET:-dev-secret}
 
+x-fake-provider: &fake-provider
+  build: .
+  command: uvicorn fake_providers.main:create_app --factory --host 0.0.0.0 --port 9000
+  healthcheck:
+    test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9000/health')"]
+    interval: 2s
+    timeout: 3s
+    retries: 30
+
 services:
   db:
     image: postgres:16-alpine
@@ -16,3 +25,51 @@ services:
       interval: 2s
       timeout: 3s
       retries: 30
+
+  migrate:
+    build: .
+    command: alembic upgrade head
+    environment:
+      <<: *app-env
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    build: .
+    command: uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000 --workers 4
+    environment:
+      <<: *app-env
+      PROVIDER_URLS: '{"alpha": "http://alpha:9000", "beta": "http://beta:9000"}'
+      PUBLIC_BASE_URL: http://api:8000
+      PROVIDER_TIMEOUT: ${PROVIDER_TIMEOUT:-60}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      alpha:
+        condition: service_healthy
+      beta:
+        condition: service_healthy
+
+  alpha:
+    <<: *fake-provider
+    environment:
+      FAKE_PROVIDER_NAME: alpha
+      FAKE_WEBHOOK_SECRET: ${WEBHOOK_SECRET:-dev-secret}
+    ports:
+      - "${ALPHA_PORT:-9001}:9000"
+
+  beta:
+    <<: *fake-provider
+    environment:
+      FAKE_PROVIDER_NAME: beta
+      FAKE_WEBHOOK_SECRET: ${WEBHOOK_SECRET:-dev-secret}
+    ports:
+      - "${BETA_PORT:-9002}:9000"
