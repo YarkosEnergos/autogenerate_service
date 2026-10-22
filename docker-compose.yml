@@ -1,0 +1,18 @@
+x-app-env: &app-env
+  DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/generation
+  WEBHOOK_SECRET: ${WEBHOOK_SECRET:-dev-secret}
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: generation
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d generation"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
