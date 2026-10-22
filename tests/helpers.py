@@ -56,3 +56,27 @@ async def get_task(client: httpx.AsyncClient, task_id: str) -> dict[str, Any]:
 
 def ledger_reasons(state: dict[str, Any]) -> list[tuple[str, int]]:
     return [(entry["reason"], entry["amount"]) for entry in reversed(state["ledger"])]
+
+
+async def provider_webhook(
+    client: httpx.AsyncClient,
+    provider: str,
+    attempt_id: str,
+    status: str,
+    *,
+    result_url: str | None = None,
+    error_type: str | None = None,
+) -> httpx.Response:
+    payload: dict[str, Any] = {"client_ref": attempt_id, "external_id": f"{provider}-ext", "status": status}
+    if status == "completed":
+        payload["result_url"] = result_url or f"https://cdn.{provider}.example/{attempt_id}.png"
+    else:
+        payload["error_type"] = error_type or "technical"
+    return await post_signed(client, f"/webhooks/providers/{provider}", payload)
+
+
+async def fail_current(client: httpx.AsyncClient, task_id: str, error_type: str = "technical") -> dict[str, Any]:
+    leg = (await get_task(client, task_id))["current_leg"]
+    response = await provider_webhook(client, leg["provider"], leg["attempt_id"], "failed", error_type=error_type)
+    assert response.status_code == 200, response.text
+    return await get_task(client, task_id)

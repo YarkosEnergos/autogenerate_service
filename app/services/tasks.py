@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.clients.providers import ProviderError, Submission
 from app.core.config import Settings
 from app.db.models import Attempt, Task
-from app.domain.enums import ACTIVE_ATTEMPT_STATUSES, AttemptStatus, ErrorType, TaskStatus
+from app.domain.enums import ACTIVE_ATTEMPT_STATUSES, AttemptStatus, ErrorType, LateResult, TaskStatus
 from app.domain.errors import (
     InsufficientTokensError,
     NoSuitableLegError,
@@ -36,6 +36,16 @@ class GenerateCommand:
 class CreatedTask:
     task_id: uuid.UUID
     attempt_id: uuid.UUID
+
+
+@dataclass(frozen=True)
+class ProviderResult:
+    client_ref: uuid.UUID
+    external_id: str | None
+    completed: bool
+    result_url: str | None = None
+    error_type: ErrorType | None = None
+    detail: str | None = None
 
 
 @dataclass(frozen=True)
@@ -121,6 +131,45 @@ class TaskService:
             return await self._fail_attempt(
                 session, task, attempt, AttemptStatus.FAILED, error.error_type, error.detail
             )
+
+    async def apply_result(self, provider: str, result: ProviderResult) -> uuid.UUID | None:
+        async with self._session_factory() as session, session.begin():
+            locked = await self._lock(session, result.client_ref, provider)
+            if locked is None:
+                raise NotFoundError(f"attempt {result.client_ref} of provider {provider} not found")
+            task, attempt = locked
+            if result.external_id and attempt.external_id is None:
+                attempt.external_id = result.external_id
+            if result.completed:
+                await self._apply_completed(session, task, attempt, result.result_url or "")
+                return None
+            if task.status != TaskStatus.PROCESSING or attempt.status not in ACTIVE_ATTEMPT_STATUSES:
+                logger.info("task %s: duplicate or late failure from %s ignored", task.id, provider)
+                return None
+            return await self._fail_attempt(
+                session, task, attempt, AttemptStatus.FAILED, result.error_type or ErrorType.TECHNICAL, result.detail
+            )
+
+    async def _apply_completed(self, session: AsyncSession, task: Task, attempt: Attempt, result_url: str) -> None:
+        if attempt.status == AttemptStatus.COMPLETED:
+            return
+        is_active = attempt.status in ACTIVE_ATTEMPT_STATUSES
+        attempt.result_url = result_url
+        if task.status != TaskStatus.PROCESSING:
+            attempt.late_result = LateResult.IGNORED
+            logger.info("task %s is already %s, late result of %s ignored", task.id, task.status, attempt.provider)
+            return
+        if not is_active:
+            attempt.late_result = LateResult.ACCEPTED
+        else:
+            attempt.finished_at = func.now()
+        attempt.status = AttemptStatus.COMPLETED
+        await session.flush()
+        await TaskRepository(session).cancel_active_attempts(task.id)
+        task.status = TaskStatus.COMPLETED
+        task.result_url = result_url
+        task.finished_at = func.now()
+        logger.info("task %s completed by %s (late=%s)", task.id, attempt.provider, not is_active)
 
     async def _lock(
         self, session: AsyncSession, attempt_id: uuid.UUID, provider: str | None = None

@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class PaymentWebhook(BaseModel):
@@ -77,3 +78,20 @@ class TaskOut(BaseModel):
     finished_at: datetime | None
     current_leg: CurrentLegOut | None
     attempts: list[AttemptOut]
+
+
+class ProviderWebhook(BaseModel):
+    client_ref: uuid.UUID
+    external_id: str | None = None
+    status: Literal["completed", "failed"]
+    result_url: str | None = None
+    error_type: Literal["technical", "moderation", "payload"] | None = None
+    detail: str | None = None
+
+    @model_validator(mode="after")
+    def check_outcome(self) -> "ProviderWebhook":
+        if self.status == "completed" and not self.result_url:
+            raise ValueError("completed webhook must contain result_url")
+        if self.status == "failed" and self.error_type is None:
+            raise ValueError("failed webhook must contain error_type")
+        return self
