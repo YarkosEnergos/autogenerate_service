@@ -66,9 +66,7 @@ class TaskService:
                 raise NotFoundError(f"model {command.model_slug} not found")
             legs = suitable_legs(model.legs, len(command.ref_images))
             if not legs:
-                raise NoSuitableLegError(
-                    f"no leg of {model.slug} accepts {len(command.ref_images)} reference images"
-                )
+                raise NoSuitableLegError(f"no leg of {model.slug} accepts {len(command.ref_images)} reference images")
 
             user = await UserRepository(session).get_for_update(command.user_id)
             if user is None:

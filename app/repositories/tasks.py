@@ -22,28 +22,23 @@ class TaskRepository:
 
     async def get_task_for_update(self, task_id: uuid.UUID) -> Task | None:
         result = await self._session.execute(
-            select(Task)
-            .where(Task.id == task_id)
-            .with_for_update()
-            .execution_options(populate_existing=True)
+            select(Task).where(Task.id == task_id).with_for_update().execution_options(populate_existing=True)
         )
         return result.scalar_one_or_none()
 
     async def count_processing(self, user_id: int) -> int:
         result = await self._session.execute(
-            select(func.count())
-            .select_from(Task)
-            .where(Task.user_id == user_id, Task.status == TaskStatus.PROCESSING)
+            select(func.count()).select_from(Task).where(Task.user_id == user_id, Task.status == TaskStatus.PROCESSING)
         )
         return result.scalar_one()
 
-    async def add_attempt(self, task: Task, leg: Leg, timeout: float) -> Attempt:
+    async def add_attempt(self, task: Task, leg: Leg, ttl_seconds: float) -> Attempt:
         attempt = Attempt(
             task_id=task.id,
             leg_id=leg.id,
             provider=leg.provider,
             status=AttemptStatus.PENDING,
-            deadline_at=func.now() + timedelta(seconds=timeout),
+            deadline_at=func.now() + timedelta(seconds=ttl_seconds),
         )
         self._session.add(attempt)
         await self._session.flush()
@@ -106,7 +101,5 @@ class TaskRepository:
         return (row[0], row[1]) if row else None
 
     async def is_expired(self, attempt_id: uuid.UUID) -> bool:
-        result = await self._session.execute(
-            select(Attempt.deadline_at <= func.now()).where(Attempt.id == attempt_id)
-        )
+        result = await self._session.execute(select(Attempt.deadline_at <= func.now()).where(Attempt.id == attempt_id))
         return bool(result.scalar_one())

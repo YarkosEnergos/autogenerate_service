@@ -1,17 +1,16 @@
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 
-from app.api.deps import get_container
+from app.api.deps import ContainerDep
 from app.api.schemas import AttemptOut, CurrentLegOut, TaskOut
-from app.container import Container
 from app.domain.enums import ACTIVE_ATTEMPT_STATUSES
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 
 @router.get("/{task_id}", response_model=TaskOut)
-async def get_task(task_id: uuid.UUID, container: Container = Depends(get_container)) -> TaskOut:
+async def get_task(task_id: uuid.UUID, container: ContainerDep) -> TaskOut:
     view = await container.tasks.get(task_id)
     task = view.task
     attempts = [

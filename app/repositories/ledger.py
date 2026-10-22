@@ -32,9 +32,6 @@ class LedgerRepository:
 
     async def recent(self, user_id: int, limit: int) -> list[LedgerEntry]:
         result = await self._session.execute(
-            select(LedgerEntry)
-            .where(LedgerEntry.user_id == user_id)
-            .order_by(LedgerEntry.id.desc())
-            .limit(limit)
+            select(LedgerEntry).where(LedgerEntry.user_id == user_id).order_by(LedgerEntry.id.desc()).limit(limit)
         )
         return list(result.scalars())

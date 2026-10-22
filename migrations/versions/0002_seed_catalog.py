@@ -5,6 +5,7 @@ Revises: 0001
 Create Date: 2026-10-22
 
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -37,10 +38,34 @@ def upgrade() -> None:
     op.bulk_insert(
         legs,
         [
-            {"model_slug": "image-fast", "provider": "alpha", "priority": 1, "max_ref_images": 4, "skip_on_moderation": False},
-            {"model_slug": "image-fast", "provider": "beta", "priority": 2, "max_ref_images": 10, "skip_on_moderation": False},
-            {"model_slug": "video-long", "provider": "beta", "priority": 1, "max_ref_images": 2, "skip_on_moderation": False},
-            {"model_slug": "video-long", "provider": "alpha", "priority": 2, "max_ref_images": 1, "skip_on_moderation": True},
+            {
+                "model_slug": "image-fast",
+                "provider": "alpha",
+                "priority": 1,
+                "max_ref_images": 4,
+                "skip_on_moderation": False,
+            },
+            {
+                "model_slug": "image-fast",
+                "provider": "beta",
+                "priority": 2,
+                "max_ref_images": 10,
+                "skip_on_moderation": False,
+            },
+            {
+                "model_slug": "video-long",
+                "provider": "beta",
+                "priority": 1,
+                "max_ref_images": 2,
+                "skip_on_moderation": False,
+            },
+            {
+                "model_slug": "video-long",
+                "provider": "alpha",
+                "priority": 2,
+                "max_ref_images": 1,
+                "skip_on_moderation": True,
+            },
         ],
     )
 

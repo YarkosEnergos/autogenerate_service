@@ -131,7 +131,10 @@ async def test_late_completed_after_refund_is_ignored(client, watchdog, expire):
     await watchdog.run_once()
 
     responses = await asyncio.gather(
-        *(provider_webhook(client, "beta", beta_attempt, "completed", result_url="https://cdn/late.png") for _ in range(3))
+        *(
+            provider_webhook(client, "beta", beta_attempt, "completed", result_url="https://cdn/late.png")
+            for _ in range(3)
+        )
     )
 
     assert [r.status_code for r in responses] == [200] * 3
@@ -153,7 +156,9 @@ async def test_completed_racing_with_watchdog_gives_result_or_refund_never_both(
         await asyncio.gather(watchdog.run_once(), provider_webhook(client, "beta", beta_attempt, "completed"))
 
         task = await get_task(client, task_id)
-        refunds = [e for e in (await balance(client, 1))["ledger"] if e["reason"] == "refund" and e["task_id"] == task_id]
+        refunds = [
+            e for e in (await balance(client, 1))["ledger"] if e["reason"] == "refund" and e["task_id"] == task_id
+        ]
         if task["status"] == "completed":
             assert task["result_url"] is not None and refunds == []
         else:

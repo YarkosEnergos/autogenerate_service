@@ -42,7 +42,9 @@ async def generate(
     return await client.post("/generate", json=payload)
 
 
-async def create_task(client: httpx.AsyncClient, user_id: int, model_slug: str = "image-fast", ref_images: int = 0) -> str:
+async def create_task(
+    client: httpx.AsyncClient, user_id: int, model_slug: str = "image-fast", ref_images: int = 0
+) -> str:
     response = await generate(client, user_id, model_slug, ref_images)
     assert response.status_code == 202, response.text
     return response.json()["task_id"]

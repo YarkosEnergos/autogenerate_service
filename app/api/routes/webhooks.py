@@ -1,8 +1,7 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Request
 
-from app.api.deps import get_container, read_signed_body
+from app.api.deps import ContainerDep, read_signed_body
 from app.api.schemas import PaymentWebhook, ProviderWebhook, WebhookAck
-from app.container import Container
 from app.domain.enums import ErrorType
 from app.services.payments import PaymentEvent
 from app.services.tasks import ProviderResult
@@ -15,7 +14,7 @@ async def provider_webhook(
     name: str,
     request: Request,
     background_tasks: BackgroundTasks,
-    container: Container = Depends(get_container),
+    container: ContainerDep,
 ) -> WebhookAck:
     payload = await read_signed_body(request, ProviderWebhook)
     result = ProviderResult(
@@ -33,7 +32,7 @@ async def provider_webhook(
 
 
 @router.post("/payments", response_model=WebhookAck)
-async def payment_webhook(request: Request, container: Container = Depends(get_container)) -> WebhookAck:
+async def payment_webhook(request: Request, container: ContainerDep) -> WebhookAck:
     payload = await read_signed_body(request, PaymentWebhook)
     await container.payments.process(PaymentEvent(**payload.model_dump()))
     return WebhookAck()

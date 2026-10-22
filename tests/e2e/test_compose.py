@@ -69,8 +69,8 @@ async def start_task(api: httpx.AsyncClient, user_id: int, model_slug: str = "im
     return response.json()["task_id"]
 
 
-async def wait_finished(api: httpx.AsyncClient, task_id: str, timeout: float = 30) -> dict[str, Any]:
-    deadline = asyncio.get_running_loop().time() + timeout
+async def wait_finished(api: httpx.AsyncClient, task_id: str, within: float = 30) -> dict[str, Any]:
+    deadline = asyncio.get_running_loop().time() + within
     while True:
         task = (await api.get(f"/tasks/{task_id}")).json()
         if task["status"] != "processing":
@@ -139,7 +139,7 @@ async def test_late_completed_after_watchdog_is_accepted(api, providers):
     await providers["alpha"].patch("/behavior", json={"late_rate": 1, "late_delay": timeout + 2})
     await providers["beta"].patch("/behavior", json={"min_delay": timeout + 10, "max_delay": timeout + 10})
 
-    task = await wait_finished(api, await start_task(api, user_id), timeout=timeout + 15)
+    task = await wait_finished(api, await start_task(api, user_id), within=timeout + 15)
 
     assert task["status"] == "completed"
     assert task["result_url"].startswith("https://cdn.alpha.example/")

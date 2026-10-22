@@ -1,6 +1,6 @@
-from typing import TypeVar
+from typing import Annotated, TypeVar
 
-from fastapi import HTTPException, Request, status
+from fastapi import Depends, HTTPException, Request, status
 from pydantic import BaseModel, ValidationError
 
 from app.container import Container
@@ -11,6 +11,9 @@ M = TypeVar("M", bound=BaseModel)
 
 def get_container(request: Request) -> Container:
     return request.app.state.container
+
+
+ContainerDep = Annotated[Container, Depends(get_container)]
 
 
 async def read_signed_body(request: Request, schema: type[M]) -> M:

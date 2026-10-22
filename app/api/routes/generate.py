@@ -1,8 +1,7 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, status
+from fastapi import APIRouter, BackgroundTasks, status
 
-from app.api.deps import get_container
+from app.api.deps import ContainerDep
 from app.api.schemas import GenerateRequest, GenerateResponse
-from app.container import Container
 from app.services.tasks import GenerateCommand
 
 router = APIRouter(tags=["generation"])
@@ -12,7 +11,7 @@ router = APIRouter(tags=["generation"])
 async def generate(
     request: GenerateRequest,
     background_tasks: BackgroundTasks,
-    container: Container = Depends(get_container),
+    container: ContainerDep,
 ) -> GenerateResponse:
     created = await container.tasks.create(GenerateCommand(**request.model_dump()))
     background_tasks.add_task(container.dispatcher.dispatch, created.attempt_id)
