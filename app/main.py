@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -22,10 +24,16 @@ def create_app(settings: Settings | None = None, gateway: ProviderGateway | None
         provider_gateway = gateway or HttpProviderGateway(
             settings.provider_urls, settings.public_base_url, settings.provider_http_timeout
         )
-        app.state.container = Container(settings, create_session_factory(engine), provider_gateway)
+        container = Container(settings, create_session_factory(engine), provider_gateway)
+        app.state.container = container
+        watchdog_task = asyncio.create_task(container.watchdog.run_forever()) if settings.watchdog_enabled else None
         try:
             yield
         finally:
+            if watchdog_task is not None:
+                watchdog_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await watchdog_task
             await provider_gateway.aclose()
             await engine.dispose()
 

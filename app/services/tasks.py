@@ -150,6 +150,29 @@ class TaskService:
                 session, task, attempt, AttemptStatus.FAILED, result.error_type or ErrorType.TECHNICAL, result.detail
             )
 
+    async def expire_next(self) -> tuple[bool, uuid.UUID | None]:
+        async with self._session_factory() as session, session.begin():
+            tasks = TaskRepository(session)
+            claimed = await tasks.claim_expired()
+            if claimed is None:
+                return False, None
+            task_id, attempt_id = claimed
+            task = await tasks.get_task_for_update(task_id)
+            attempt = await tasks.get_attempt(attempt_id)
+            if (
+                task is None
+                or attempt is None
+                or task.status != TaskStatus.PROCESSING
+                or attempt.status not in ACTIVE_ATTEMPT_STATUSES
+                or not await tasks.is_expired(attempt_id)
+            ):
+                return True, None
+            detail = f"no result within {self._settings.provider_timeout:g}s"
+            next_attempt_id = await self._fail_attempt(
+                session, task, attempt, AttemptStatus.TIMED_OUT, ErrorType.TIMEOUT, detail
+            )
+            return True, next_attempt_id
+
     async def _apply_completed(self, session: AsyncSession, task: Task, attempt: Attempt, result_url: str) -> None:
         if attempt.status == AttemptStatus.COMPLETED:
             return
