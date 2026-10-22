@@ -5,27 +5,34 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.api.errors import register_error_handlers
-from app.api.routes import users, webhooks
+from app.api.routes import generate, tasks, users, webhooks
+from app.clients.providers import HttpProviderGateway, ProviderGateway
 from app.container import Container
 from app.core.config import Settings, get_settings
 from app.db.session import create_engine, create_session_factory
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(settings: Settings | None = None, gateway: ProviderGateway | None = None) -> FastAPI:
     settings = settings or get_settings()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(process)d %(levelname)s %(name)s: %(message)s")
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         engine = create_engine(settings.database_url)
-        app.state.container = Container(settings, create_session_factory(engine))
+        provider_gateway = gateway or HttpProviderGateway(
+            settings.provider_urls, settings.public_base_url, settings.provider_http_timeout
+        )
+        app.state.container = Container(settings, create_session_factory(engine), provider_gateway)
         try:
             yield
         finally:
+            await provider_gateway.aclose()
             await engine.dispose()
 
     app = FastAPI(title="Generation service", lifespan=lifespan)
     register_error_handlers(app)
-    app.include_router(webhooks.router)
+    app.include_router(generate.router)
+    app.include_router(tasks.router)
     app.include_router(users.router)
+    app.include_router(webhooks.router)
     return app

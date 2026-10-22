@@ -28,3 +28,31 @@ async def balance(client: httpx.AsyncClient, user_id: int) -> dict[str, Any]:
     response = await client.get(f"/users/{user_id}/balance")
     response.raise_for_status()
     return response.json()
+
+
+async def generate(
+    client: httpx.AsyncClient, user_id: int, model_slug: str = "image-fast", ref_images: int = 0
+) -> httpx.Response:
+    payload = {
+        "user_id": user_id,
+        "model_slug": model_slug,
+        "prompt": "a cat in a hat",
+        "ref_images": [f"https://refs.example/{i}.png" for i in range(ref_images)],
+    }
+    return await client.post("/generate", json=payload)
+
+
+async def create_task(client: httpx.AsyncClient, user_id: int, model_slug: str = "image-fast", ref_images: int = 0) -> str:
+    response = await generate(client, user_id, model_slug, ref_images)
+    assert response.status_code == 202, response.text
+    return response.json()["task_id"]
+
+
+async def get_task(client: httpx.AsyncClient, task_id: str) -> dict[str, Any]:
+    response = await client.get(f"/tasks/{task_id}")
+    response.raise_for_status()
+    return response.json()
+
+
+def ledger_reasons(state: dict[str, Any]) -> list[tuple[str, int]]:
+    return [(entry["reason"], entry["amount"]) for entry in reversed(state["ledger"])]

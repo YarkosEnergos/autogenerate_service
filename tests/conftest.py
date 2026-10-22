@@ -13,6 +13,7 @@ from sqlalchemy import make_url, text
 
 from app.core.config import Settings
 from app.main import create_app
+from tests.fakes import FakeGateway
 from tests.helpers import WEBHOOK_SECRET
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -54,8 +55,13 @@ def settings(database_url: str) -> Settings:
 
 
 @pytest.fixture
-async def app(settings: Settings) -> AsyncIterator[FastAPI]:
-    application = create_app(settings)
+def gateway() -> FakeGateway:
+    return FakeGateway()
+
+
+@pytest.fixture
+async def app(settings: Settings, gateway: FakeGateway) -> AsyncIterator[FastAPI]:
+    application = create_app(settings, gateway=gateway)
     async with application.router.lifespan_context(application):
         session_factory = application.state.container.session_factory
         async with session_factory() as session, session.begin():
